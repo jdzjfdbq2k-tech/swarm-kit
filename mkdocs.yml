@@ -1,6 +1,70 @@
 site_name: Swarm Kit
-site_description: A minimalist, state-aware multi-agent orchestration framework.
+site_description: A minimalist, state-aware multi-agent orchestration framework for Python.
+site_url: https://moseleydev.github.io/swarm-kit/
+repo_url: https://github.com/moseleydev/swarm-kit
+repo_name: moseleydev/swarm-kit
+edit_uri: edit/main/docs/
+
 theme:
   name: material
   palette:
-    scheme: slate
+    - scheme: slate
+      primary: amber
+      accent: amber
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+    - scheme: default
+      primary: amber
+      accent: amber
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - content.code.copy
+    - content.action.edit
+    - search.suggest
+    - search.highlight
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Guide:
+      - Agents: guide/agents.md
+      - Tools: guide/tools.md
+      - Execution Modes: guide/modes.md
+      - Global State: guide/state.md
+      - Persistence & Sessions: guide/persistence.md
+      - Observability & Studio: guide/observability.md
+      - Models & Providers: guide/providers.md
+  - Examples: examples.md
+  - API Reference: api.md
+  - Contributing: contributing.md
+  - Changelog: changelog.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets:
+      check_paths: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/moseleydev/swarm-kit
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/swarm-agent-kit/
