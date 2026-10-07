@@ -11,7 +11,7 @@ jobs:
 
     environment:
       name: pypi
-      url: https://pypi.org/p/swarm-kit
+      url: https://pypi.org/p/swarm-agent-kit
 
     permissions:
       id-token: write # IMPORTANT: This is the cryptographic key PyPI requires

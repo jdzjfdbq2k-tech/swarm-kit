@@ -1,8 +1,26 @@
+# Python
 .venv/
+venv/
 __pycache__/
 *.pyc
-.env
-.swarm_runs.jsonl
+*.egg-info/
 dist/
 build/
-*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Secrets
+.env
+
+# Swarm Kit runtime logs
+.swarm_runs.jsonl
+
+# MkDocs build output (deployed to the gh-pages branch)
+site/
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
