@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 📖 Documentation
+    url: https://moseleydev.github.io/swarm-kit/
+    about: Guides and API reference
+  - name: 🔒 Report a security vulnerability
+    url: https://github.com/moseleydev/swarm-kit/security/advisories/new
+    about: Please report security issues privately

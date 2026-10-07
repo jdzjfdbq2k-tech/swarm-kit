@@ -1,26 +1,40 @@
+import json
+import os
+
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
-import os
-import json
 
-app = FastAPI()
-LOG_FILE = ".swarm_runs.jsonl"
+app = FastAPI(title="Swarm Kit Agent Studio")
+
+
+def _log_file() -> str:
+    return os.environ.get("SWARM_KIT_LOG_FILE", ".swarm_runs.jsonl")
+
+
+def read_logs(path: str):
+    """Read the JSONL log, skipping blank or partially-written lines."""
+    logs = []
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                try:
+                    logs.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+    return logs
+
 
 @app.get("/api/logs")
 def get_logs():
     """Returns the raw JSON logs for the frontend to render smoothly."""
-    logs = []
-    if os.path.exists(LOG_FILE):
-        with open(LOG_FILE, "r") as f:
-            for line in f:
-                if line.strip():
-                    logs.append(json.loads(line))
-    return {"logs": logs}
+    return {"logs": read_logs(_log_file())}
 
 @app.get("/", response_class=HTMLResponse)
 def get_dashboard():
     """Serves the static SPA dashboard."""
-    html_content = """
+    html_content = r"""
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -34,20 +48,20 @@ def get_dashboard():
             ::-webkit-scrollbar-track { background: #09090b; }
             ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 4px; }
             ::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
-            
+
             /* Smooth transitions for new log entries */
             .log-entry { animation: fadeIn 0.3s ease-in-out; }
             @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         </style>
     </head>
     <body class="bg-zinc-950 text-zinc-300 font-sans h-screen flex flex-col antialiased">
-        
+
         <header class="bg-zinc-900 border-b border-zinc-800 px-6 py-4 flex justify-between items-center sticky top-0 z-10">
             <div class="flex items-center gap-3">
                 <div class="text-2xl">🤖</div>
                 <div>
                     <h1 class="text-zinc-100 font-semibold text-lg leading-tight">Agent Studio</h1>
-                    <p class="text-zinc-500 text-xs font-mono">localhost:8000</p>
+                    <p class="text-zinc-500 text-xs font-mono" id="host-label"></p>
                 </div>
             </div>
             <div class="flex items-center gap-2 px-3 py-1 bg-zinc-950 border border-zinc-800 rounded-full">
@@ -71,7 +85,18 @@ def get_dashboard():
             const logContainer = document.getElementById('log-container');
             const scrollContainer = document.getElementById('scroll-container');
             let logCount = 0;
+            let runId = null;
             let isAutoScrolling = true;
+            document.getElementById('host-label').textContent = window.location.host;
+
+            function escapeHtml(value) {
+                return String(value ?? '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
 
             // Detect if user scrolls up, so we don't force them back down
             scrollContainer.addEventListener('scroll', () => {
@@ -83,6 +108,9 @@ def get_dashboard():
                 if (action === 'Error') return 'bg-rose-500/10 text-rose-400 border-rose-500/20';
                 if (action === 'Complete') return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
                 if (action === 'Transfer') return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+                if (action === 'Tool' || action === 'ToolResult') return 'bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/20';
+                if (action === 'StateUpdate') return 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20';
+                if (action === 'Plan') return 'bg-violet-500/10 text-violet-400 border-violet-500/20';
                 if (agent === 'System') return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
                 return 'bg-zinc-800 text-zinc-300 border-zinc-700'; // Default Response
             }
@@ -91,7 +119,14 @@ def get_dashboard():
                 try {
                     const res = await fetch('/api/logs');
                     const data = await res.json();
-                    
+
+                    // A new run truncates the log file: start the view over.
+                    const currentRun = data.logs.length ? JSON.stringify(data.logs[0]) : null;
+                    if (currentRun !== runId || data.logs.length < logCount) {
+                        runId = currentRun;
+                        logCount = 0;
+                    }
+
                     if (data.logs.length > logCount) {
                         // Clear loading state if it exists
                         if (logCount === 0) logContainer.innerHTML = '';
@@ -100,25 +135,27 @@ def get_dashboard():
                         for (let i = logCount; i < data.logs.length; i++) {
                             const log = data.logs[i];
                             const badgeClass = getBadgeStyle(log.action, log.agent);
-                            
+
                             const logEl = document.createElement('div');
                             logEl.className = 'log-entry bg-zinc-900 border border-zinc-800 rounded-lg p-5 shadow-sm';
-                            
+
                             // Format content: wrap code blocks if any, or just maintain whitespace
-                            const formattedContent = log.content.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                            const formattedContent = escapeHtml(log.content);
+                            const time = log.timestamp ? new Date(log.timestamp * 1000).toLocaleTimeString() : '';
 
                             logEl.innerHTML = `
                                 <div class="flex items-center gap-3 mb-3">
-                                    <span class="font-bold text-zinc-200">${log.agent}</span>
+                                    <span class="font-bold text-zinc-200">${escapeHtml(log.agent)}</span>
                                     <span class="px-2.5 py-0.5 rounded-full text-xs font-medium border ${badgeClass}">
-                                        ${log.action}
+                                        ${escapeHtml(log.action)}
                                     </span>
+                                    <span class="ml-auto text-xs text-zinc-600 font-mono">${escapeHtml(time)}</span>
                                 </div>
                                 <div class="text-zinc-400 text-sm font-mono whitespace-pre-wrap leading-relaxed">${formattedContent}</div>
                             `;
                             logContainer.appendChild(logEl);
                         }
-                        
+
                         logCount = data.logs.length;
 
                         // Auto-scroll to bottom if the user hasn't scrolled up manually

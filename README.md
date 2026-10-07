@@ -1,110 +1,155 @@
 # 🐝 Swarm Agent Kit
 
-**A minimalist, state-aware multi-agent orchestration framework designed for production backends.**
+**A minimalist, state-aware multi-agent orchestration framework for Python.**
 
-![PyPI version](https://img.shields.io/pypi/v/swarm-agent-kit.svg?color=blue)
-![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)
-![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-![Documentation](https://img.shields.io/badge/docs-live-brightgreen)
+[![PyPI version](https://img.shields.io/pypi/v/swarm-agent-kit.svg?color=blue)](https://pypi.org/project/swarm-agent-kit/)
+[![CI](https://github.com/moseleydev/swarm-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/moseleydev/swarm-kit/actions/workflows/ci.yml)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/moseleydev/swarm-kit/blob/main/LICENSE)
+[![Docs](https://img.shields.io/badge/docs-live-brightgreen)](https://moseleydev.github.io/swarm-kit/)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-orange.svg)](https://github.com/moseleydev/swarm-kit/blob/main/CONTRIBUTING.md)
+
+Swarm Kit sits between simple chat scripts and heavyweight agent frameworks. It provides
+shared state, tool execution, async support, database persistence hooks and a live
+dashboard. The core engine is short enough to read in one sitting.
+
+```python
+from swarm_kit import Agent, Swarm
+
+def lookup_order(order_id: str) -> str:
+    """Look up the status of a customer's order."""
+    return {"ORD-123": "Shipped"}.get(order_id, "Order not found")
+
+support = Agent(name="Support", instructions="Help customers with their orders.", tools=[lookup_order])
+
+result = Swarm(agents=[support]).execute("Support", "Where is ORD-123?")
+print(result.final_output)  # "Your order ORD-123 has shipped!"
+```
 
 ---
 
-## Overview
+## Features
 
-Swarm Agent Kit bridges the gap between simple chat scripts and complex production environments. It provides native state management, async execution, database persistence hooks, and a real-time observability dashboard.
+- **Two orchestration modes.** In **unsupervised** mode, agents hand off to each other on
+  their own. In **supervised** mode, a planner LLM runs agents through a fixed sequence.
+- **Any model.** Built on [LiteLLM](https://docs.litellm.ai/docs/providers), so OpenAI,
+  Anthropic, Gemini, Ollama, Azure, Bedrock and 100+ other providers work, and each agent can
+  use a different one.
+- **Plain-function tools.** Pass a typed Python function and the JSON schema is generated
+  from its signature and docstring. Sync and `async` functions both work.
+- **Global state.** Agents read and update a shared dictionary, which keeps prompts short.
+- **Bring your own database.** Save/load hooks work with Redis, Postgres, SQLite and others.
+  Concurrent sessions stay isolated.
+- **Async support.** `execute_async()` is safe to call from FastAPI and other `asyncio` servers.
+- **Observability.** You get a live terminal transcript, a structured `event_handler`
+  callback, a JSONL event log, and the **Agent Studio** dashboard.
 
-**Dual-Mode Orchestration** — Choose between **Unsupervised Mode** (agents dynamically route and hand off tasks autonomously) or **Supervised Mode** (a central LLM planner forces agents through a strict sequential pipeline).
-
-**Bring-Your-Own-Database (BYOD)** — Native persistence hooks let you seamlessly save and resume sessions using Redis, PostgreSQL, or any database of your choice.
-
-**Production-Ready Async** — Full `async/await` support, safe to deploy inside high-concurrency frameworks like FastAPI.
-
-**Global State Management** — Agents share and mutate a global memory dictionary via built-in tools, keeping context lean and token usage low.
-
-**Native Tool Execution** — Bind standard Python functions and JSON schemas to specific agents to trigger external APIs.
-
----
-
-## Quick Start
-
-### Installation
+## Installation
 
 ```bash
 pip install swarm-agent-kit
 ```
 
-Set your API keys in a `.env` file (powered by LiteLLM — supports 100+ providers):
+Put your API key in a `.env` file. It is loaded automatically:
 
 ```env
 OPENAI_API_KEY="sk-..."
 ```
 
-### Basic Usage
+Or run `swarm-kit init my-project` to generate a starter project.
+
+## Unsupervised mode: agents hand off to each other
 
 ```python
-from swarm_kit.core.agent import Agent
-from swarm_kit.core.swarm import Swarm
-import asyncio
+from swarm_kit import Agent, Swarm
 
-# 1. Define your specialized agents
-support = Agent(
-    name="Support",
-    instructions="You are a helpful IT support agent. Help the user fix their bug."
+def process_refund(order_number: str) -> str:
+    """Process a refund. Call this only once you have the order number."""
+    return f"Refund issued for {order_number}."
+
+triage = Agent(
+    name="Triage",
+    description="Front desk that routes customers.",
+    instructions="Find out what the user needs. Refunds go to 'Billing'.",
+)
+billing = Agent(
+    name="Billing",
+    description="Handles refunds.",
+    instructions="Issue refunds with process_refund, then confirm to the user.",
+    tools=[process_refund],
+    model="gpt-4o-mini",
 )
 
-# 2. Initialize the Swarm (with optional DB hooks)
-swarm = Swarm(agents=[support])
+swarm = Swarm(agents=[triage, billing])
+result = swarm.execute("Triage", "I want a refund for INV-992")
 
-# 3. Execute asynchronously
-async def main():
-    await swarm.execute_async(
-        start_agent_name="Support",
-        user_input="My dashboard is crashing on startup.",
-        session_id="ticket_123"
-    )
-
-if __name__ == "__main__":
-    asyncio.run(main())
+print(result.last_agent, result.final_output, result.state)
 ```
 
----
-
-## CLI & Observability
-
-Swarm Agent Kit ships with a built-in CLI and a real-time local dashboard to visualize agent handovers, tool executions, and state mutations.
-
-```bash
-swarm-kit studio
-```
-
-Runs locally at `http://localhost:8000`
-
----
-
-## Database Persistence
-
-Never lose session history. Pass your own save/load handlers and Swarm Kit handles the rest:
+## Supervised mode: a planner runs the agents in order
 
 ```python
-def save_to_redis(session_id, history, state):
-    redis_client.set(session_id, {"history": history, "state": state})
+swarm = Swarm(agents=[researcher, copywriter, editor])
+result = swarm.execute_plan("Write a tweet about the Apollo 11 landing")
 
-swarm = Swarm(agents=[...], save_handler=save_to_redis)
-await swarm.execute_async(..., session_id="ticket_123")
+print(result.plan)          # [{'agent_name': 'Researcher', 'task': ...}, ...]
+print(result.final_output)
 ```
 
-Works with Redis, PostgreSQL, SQLite, or any storage backend.
+## Async and database persistence
 
----
+```python
+async def load(session_id):
+    data = await redis.get(session_id)
+    return (json.loads(data)["history"], json.loads(data)["state"]) if data else ([], {})
+
+async def save(session_id, history, state):
+    await redis.set(session_id, json.dumps({"history": history, "state": state}))
+
+swarm = Swarm(agents=[support], load_handler=load, save_handler=save, verbose=False, log_file=None)
+
+@app.post("/chat")
+async def chat(req: ChatRequest):
+    result = await swarm.execute_async("Support", req.message, session_id=req.user_id)
+    return {"reply": result.final_output}
+```
+
+## Agent Studio
+
+```bash
+swarm-kit studio   # http://127.0.0.1:8000
+```
+
+The Studio is a live, local dashboard that shows each response, handoff, tool call and state
+change while your swarm runs.
 
 ## Documentation
 
-Full API references, tutorials, and advanced integration guides:
+The full guides and API reference are at **[moseleydev.github.io/swarm-kit](https://moseleydev.github.io/swarm-kit/)**:
 
-**[moseleydev.github.io/swarm-kit](https://moseleydev.github.io/swarm-kit/)**
+- [Getting Started](https://moseleydev.github.io/swarm-kit/getting-started/)
+- [Tools](https://moseleydev.github.io/swarm-kit/guide/tools/)
+- [Execution Modes](https://moseleydev.github.io/swarm-kit/guide/modes/)
+- [Persistence](https://moseleydev.github.io/swarm-kit/guide/persistence/)
+- [API Reference](https://moseleydev.github.io/swarm-kit/api/)
 
----
+Runnable examples are in [`examples/`](https://github.com/moseleydev/swarm-kit/tree/main/examples).
+
+## Contributing
+
+Contributions of any size are welcome, from typo fixes to new features. Start with
+[CONTRIBUTING.md](https://github.com/moseleydev/swarm-kit/blob/main/CONTRIBUTING.md), then look at issues labelled
+[`good first issue`](https://github.com/moseleydev/swarm-kit/labels/good%20first%20issue) or
+[`help wanted`](https://github.com/moseleydev/swarm-kit/labels/help%20wanted).
+
+```bash
+git clone https://github.com/moseleydev/swarm-kit && cd swarm-kit
+uv sync --group dev && uv run pytest   # no API key needed
+```
+
+Please read our [Code of Conduct](https://github.com/moseleydev/swarm-kit/blob/main/CODE_OF_CONDUCT.md). To report a vulnerability, see
+[SECURITY.md](https://github.com/moseleydev/swarm-kit/blob/main/SECURITY.md).
 
 ## License
 
-MIT © moseleydev
+[MIT](https://github.com/moseleydev/swarm-kit/blob/main/LICENSE) © moseleydev

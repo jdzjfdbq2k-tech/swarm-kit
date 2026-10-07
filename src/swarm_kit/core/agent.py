@@ -1,29 +1,68 @@
-from litellm import completion, acompletion
-from typing import List, Dict, Any, Optional, Tuple, Callable
-from .types import AgentOutput
 import json
+import uuid
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+
+from litellm import acompletion, completion
+
+from .tools import normalize_tool
+from .types import AgentOutput, ToolCall
+
+ToolSpec = Union[Callable[..., Any], Tuple[Dict[str, Any], Callable[..., Any]]]
+
+TRANSFER_TOOL = "transfer"
+UPDATE_STATE_TOOL = "update_state"
+RESERVED_TOOL_NAMES = {TRANSFER_TOOL, UPDATE_STATE_TOOL}
+
 
 class Agent:
+    """A single LLM-backed worker with its own instructions, model and tools.
+
+    Args:
+        name: Unique name used for routing and transfers.
+        instructions: The system prompt for this agent.
+        model: Any LiteLLM model string, e.g. ``"gpt-4o"`` or ``"anthropic/claude-sonnet-4-5"``.
+        tools: Functions the agent may call. Each item is either a plain function
+            (its schema is generated from type hints and the docstring) or a
+            ``(schema, function)`` tuple. Functions may be sync or ``async``.
+        api_key: Optional API key passed straight to LiteLLM.
+        description: Short summary shown to the supervisor/planner and to other
+            agents deciding whom to transfer to. Defaults to ``instructions``.
+        model_kwargs: Extra keyword arguments forwarded to LiteLLM on every call
+            (e.g. ``{"temperature": 0.2, "api_base": "..."}``).
+    """
+
     def __init__(
-        self, 
-        name: str, 
-        instructions: str, 
-        model: str = "gpt-4o", 
-        tools: List[Tuple[Dict[str, Any], Callable]] = None,
-        api_key: Optional[str] = None
+        self,
+        name: str,
+        instructions: str,
+        model: str = "gpt-4o",
+        tools: Optional[List[ToolSpec]] = None,
+        api_key: Optional[str] = None,
+        description: Optional[str] = None,
+        model_kwargs: Optional[Dict[str, Any]] = None,
     ):
         self.name = name
         self.instructions = instructions
         self.model = model
         self.api_key = api_key
-        
-        self.custom_tool_schemas = [t[0] for t in tools] if tools else []
-        self.functions = {t[0]["function"]["name"]: t[1] for t in tools} if tools else {}
+        self.description = description or instructions
+        self.model_kwargs = dict(model_kwargs or {})
+
+        normalized = [normalize_tool(t) for t in tools or []]
+        self.custom_tool_schemas = [schema for schema, _ in normalized]
+        self.functions: Dict[str, Callable[..., Any]] = {}
+        for schema, func in normalized:
+            tool_name = schema["function"]["name"]
+            if tool_name in RESERVED_TOOL_NAMES:
+                raise ValueError(f"Tool name '{tool_name}' is reserved by Swarm Kit.")
+            if tool_name in self.functions:
+                raise ValueError(f"Duplicate tool name '{tool_name}' on agent '{name}'.")
+            self.functions[tool_name] = func
 
         self.base_tools = [{
             "type": "function",
             "function": {
-                "name": "transfer",
+                "name": TRANSFER_TOOL,
                 "description": "Transfer control to another agent.",
                 "parameters": {
                     "type": "object",
@@ -35,17 +74,31 @@ class Agent:
             }
         }]
 
-    def _build_kwargs(self, messages: List[Dict[str, Any]], state: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    def __repr__(self) -> str:
+        return f"Agent(name={self.name!r}, model={self.model!r}, tools={list(self.functions)})"
+
+    def _build_kwargs(
+        self,
+        messages: List[Dict[str, Any]],
+        state: Optional[Dict[str, Any]],
+        peers: Optional[Dict[str, str]] = None,
+        allow_transfer: bool = True,
+    ) -> Dict[str, Any]:
         """Helper to build the LiteLLM payload for both sync and async methods."""
         system_content = self.instructions
-        current_tools = self.base_tools.copy() + self.custom_tool_schemas
-        
+        current_tools = (self.base_tools.copy() if allow_transfer else []) + self.custom_tool_schemas
+
+        if allow_transfer and peers:
+            roster = "\n".join(f"- {name}: {desc}" for name, desc in peers.items() if name != self.name)
+            if roster:
+                system_content += f"\n\n--- AGENTS YOU CAN TRANSFER TO ---\n{roster}"
+
         if state is not None:
-            system_content += f"\n\n--- CURRENT GLOBAL STATE ---\n{json.dumps(state, indent=2)}"
+            system_content += f"\n\n--- CURRENT GLOBAL STATE ---\n{json.dumps(state, indent=2, default=str)}"
             current_tools.append({
                 "type": "function",
                 "function": {
-                    "name": "update_state",
+                    "name": UPDATE_STATE_TOOL,
                     "description": "Update a value in the global state dictionary.",
                     "parameters": {
                         "type": "object",
@@ -58,31 +111,43 @@ class Agent:
                 }
             })
 
-        kwargs = {
+        kwargs: Dict[str, Any] = {
+            **self.model_kwargs,
             "model": self.model,
             "messages": [{"role": "system", "content": system_content}] + messages,
-            "tools": current_tools
         }
-        
+        if current_tools:
+            kwargs["tools"] = current_tools
+
         if self.api_key:
             kwargs["api_key"] = self.api_key
-            
+
         return kwargs
 
     def _parse_response(self, response) -> AgentOutput:
         """Helper to format the LLM output."""
         message = response.choices[0].message
         content = message.content or ""
-        
+
         tool_calls = None
-        if hasattr(message, 'tool_calls') and message.tool_calls:
+        if getattr(message, "tool_calls", None):
             tool_calls = []
             for tool in message.tool_calls:
-                tool_calls.append({
-                    "name": tool.function.name,
-                    "arguments": json.loads(tool.function.arguments)
-                })
-        
+                raw_args = tool.function.arguments or "{}"
+                parse_error = None
+                try:
+                    arguments = json.loads(raw_args) if isinstance(raw_args, str) else dict(raw_args)
+                    if not isinstance(arguments, dict):
+                        raise ValueError("arguments must be a JSON object")
+                except (ValueError, TypeError) as e:
+                    arguments, parse_error = {}, f"Invalid JSON arguments: {e}"
+                tool_calls.append(ToolCall(
+                    id=getattr(tool, "id", None) or f"call_{uuid.uuid4().hex[:24]}",
+                    name=tool.function.name,
+                    arguments=arguments,
+                    parse_error=parse_error,
+                ))
+
         return AgentOutput(
             agent_name=self.name,
             content=content,
@@ -90,14 +155,12 @@ class Agent:
             raw_response=response
         )
 
-    def run(self, messages: List[Dict[str, Any]], state: Optional[Dict[str, Any]] = None) -> AgentOutput:
+    def run(self, messages: List[Dict[str, Any]], state: Optional[Dict[str, Any]] = None, **kwargs) -> AgentOutput:
         """Standard synchronous execution."""
-        kwargs = self._build_kwargs(messages, state)
-        response = completion(**kwargs)
+        response = completion(**self._build_kwargs(messages, state, **kwargs))
         return self._parse_response(response)
 
-    async def run_async(self, messages: List[Dict[str, Any]], state: Optional[Dict[str, Any]] = None) -> AgentOutput:
+    async def run_async(self, messages: List[Dict[str, Any]], state: Optional[Dict[str, Any]] = None, **kwargs) -> AgentOutput:
         """Non-blocking asynchronous execution."""
-        kwargs = self._build_kwargs(messages, state)
-        response = await acompletion(**kwargs)
+        response = await acompletion(**self._build_kwargs(messages, state, **kwargs))
         return self._parse_response(response)
