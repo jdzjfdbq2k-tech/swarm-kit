@@ -22,6 +22,11 @@ LoadHandler = Callable[[str], Any]
 EventHandler = Callable[[Dict[str, Any]], Any]
 
 
+def _reject_constant(name: str) -> None:
+    """Reject non-standard JSON constants when decoding state values."""
+    raise ValueError(name)
+
+
 # ------------------------------------------------------------------
 # Requests the execution engine yields to a sync or async driver.
 # The engine itself is a plain generator, so the orchestration logic
@@ -288,8 +293,8 @@ class Swarm:
                 return "Error: 'key' is required."
             if isinstance(value, str):
                 try:
-                    value = json.loads(value)
-                except json.JSONDecodeError:
+                    value = json.loads(value, parse_constant=_reject_constant)
+                except ValueError:
                     pass
             ctx.state[key] = value
             self._save_log(agent.name, "StateUpdate", f"{key} = {value}", key=key, value=value)

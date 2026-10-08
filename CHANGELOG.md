@@ -6,10 +6,12 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
-### Added
+### Changed
 - `update_state` decodes JSON-encoded string values, supporting numbers, booleans,
-  lists, objects and null. Non-JSON text remains unchanged; quoted JSON strings
-  preserve numeric-looking text.
+  lists, objects and null. Non-JSON text, including `NaN`, `Infinity` and
+  `-Infinity`, remains unchanged.
+- Numeric-looking strings such as IDs are now stored as numbers; send them as
+  JSON strings (`'"12345"'`) to keep them as text.
 
 ## [0.2.0] - 2026-10-08
 
