@@ -54,6 +54,8 @@ swarm-kit studio --port 9000 --log-file path/to/run.jsonl
 Run your swarm in another terminal and the dashboard updates every second, with badges for
 each action type.
 
+![Agent Studio following a run](../assets/studio-demo.gif)
+
 !!! warning
     The Studio has no authentication and shows full prompts and tool output. Keep it bound
     to `127.0.0.1`.

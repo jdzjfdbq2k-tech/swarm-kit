@@ -6,7 +6,7 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
-## [0.2.0] - 2026-10-07
+## [0.2.0] - 2026-10-08
 
 ### Added
 - `Swarm.execute*()` now return a `SwarmResult` (history, state, final output, last agent, turns, plan).
@@ -21,6 +21,7 @@ All notable changes to this project are documented here. The format is based on
 - CLI: `swarm-kit version`, `swarm-kit init [DIR] --force`, `swarm-kit studio --host --log-file`.
 - Studio shows tool calls, results, state updates, plans and timestamps, and resets on a new run.
 - `from swarm_kit import Agent, Swarm` now works (exports were declared but never imported).
+- Agent Studio demo GIF in the README and docs; Hacktoberfest and issue-claiming guidelines.
 - Test suite (no API keys needed), CI on Python 3.10–3.13, docs deployment workflow,
   contributor guide, code of conduct, security policy, and issue/PR templates.
 
