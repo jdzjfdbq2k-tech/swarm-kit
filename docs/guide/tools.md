@@ -74,8 +74,30 @@ they run through `asyncio.run()`, which fails when an event loop is already runn
 case, use `execute_async()`.
 
 !!! note
-    In `execute_async()`, **synchronous** tools run directly on the event loop. Avoid long
-    blocking calls in them, or make them `async`.
+    In `execute_async()`, **synchronous** tools run directly on the event loop by default, so a
+    long blocking call stalls every other task. Avoid blocking calls in them, make them `async`,
+    or opt in to a worker thread (below).
+
+### Synchronous tools on a worker thread (opt-in)
+
+Set `run_sync_tools_in_thread=True` to run synchronous custom tools in a worker thread during
+async execution:
+
+```python
+swarm = Swarm(agents=[researcher, billing], run_sync_tools_in_thread=True)
+await swarm.execute_async("Researcher", "...")
+```
+
+Each synchronous tool call is executed with `asyncio.to_thread(...)`, so the event loop stays
+free and several concurrent runs can have blocking tools in flight at the same time. The option
+defaults to `False` (opt-in) and applies only to synchronous custom tools during
+`execute_async()` / `execute_plan_async()`.
+
+- `async def` tools are unaffected: they are still awaited on the event loop, not sent to a thread.
+- Built-in tools (`transfer`, `update_state`), save/load handlers, event handlers and the
+  planner are unaffected.
+- Cancelling the async task waiting for a synchronous tool does not stop a tool already running
+  in its worker thread; the tool continues until the function returns.
 
 ## Return values and errors
 
