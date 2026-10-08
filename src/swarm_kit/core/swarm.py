@@ -286,6 +286,11 @@ class Swarm:
             key, value = call.arguments.get("key"), call.arguments.get("value")
             if not key:
                 return "Error: 'key' is required."
+            if isinstance(value, str):
+                try:
+                    value = json.loads(value)
+                except json.JSONDecodeError:
+                    pass
             ctx.state[key] = value
             self._save_log(agent.name, "StateUpdate", f"{key} = {value}", key=key, value=value)
             return f"State updated '{key}' to '{value}'."

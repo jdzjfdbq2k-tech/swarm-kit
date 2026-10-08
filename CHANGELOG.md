@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- `update_state` decodes JSON-encoded string values, supporting numbers, booleans,
+  lists, objects and null. Non-JSON text remains unchanged; quoted JSON strings
+  preserve numeric-looking text.
+
 ## [0.2.0] - 2026-10-07
 
 ### Added
