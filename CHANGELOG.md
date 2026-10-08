@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- `Swarm(run_sync_tools_in_thread=True)`: opt-in support for running synchronous custom tools in
+  a worker thread (`asyncio.to_thread`) during `execute_async()`/`execute_plan_async()`, so
+  blocking tools no longer stall the event loop and concurrent runs can have them in flight at
+  the same time. `async def` tools are still awaited on the event loop.
+
 ### Changed
 - `update_state` decodes JSON-encoded string values, supporting numbers, booleans,
   lists, objects and null. Non-JSON text, including `NaN`, `Infinity` and

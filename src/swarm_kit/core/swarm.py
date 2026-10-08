@@ -86,6 +86,8 @@ class Swarm:
         event_handler: Optional callback receiving every event dict
             (``{"agent", "action", "content", "timestamp", ...}``).
         planner_kwargs: Extra LiteLLM kwargs for the planner call (e.g. ``api_key``).
+        run_sync_tools_in_thread: Opt in to running synchronous custom tools in a worker
+            thread during async execution. ``async def`` tools are unaffected.
     """
 
     def __init__(
@@ -98,6 +100,7 @@ class Swarm:
         verbose: bool = True,
         event_handler: Optional[EventHandler] = None,
         planner_kwargs: Optional[Dict[str, Any]] = None,
+        run_sync_tools_in_thread: bool = False,
     ):
         if not agents:
             raise ValueError("A Swarm needs at least one agent.")
@@ -114,6 +117,7 @@ class Swarm:
         self.planner_kwargs = dict(planner_kwargs or {})
         self.verbose = verbose
         self.event_handler = event_handler
+        self.run_sync_tools_in_thread = run_sync_tools_in_thread
 
         # Database Hooks
         self.save_handler = save_handler
@@ -510,7 +514,10 @@ class Swarm:
                         request.history, request.state, peers=self._peers, allow_transfer=request.allow_transfer
                     )
                 elif isinstance(request, _ToolRequest):
-                    to_send = await _resolve_async(request.func(**request.arguments))
+                    if self.run_sync_tools_in_thread and not inspect.iscoroutinefunction(request.func):
+                        to_send = await _resolve_async(await asyncio.to_thread(request.func, **request.arguments))
+                    else:
+                        to_send = await _resolve_async(request.func(**request.arguments))
                 elif isinstance(request, _HookRequest):
                     to_send = await _resolve_async(request.func(*request.args))
                 elif isinstance(request, _PlanRequest):
