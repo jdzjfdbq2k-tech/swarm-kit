@@ -9,6 +9,7 @@
 [![Docs](https://img.shields.io/badge/docs-live-brightgreen)](https://moseleydev.github.io/swarm-kit/)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-orange.svg)](https://github.com/moseleydev/swarm-kit/blob/main/CONTRIBUTING.md)
 [![Hacktoberfest](https://img.shields.io/badge/Hacktoberfest-friendly-ff6f00.svg)](https://github.com/moseleydev/swarm-kit/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+[![Support on FLOSS Africa](https://img.shields.io/badge/support-FLOSS%20Africa-f59e0b.svg)](https://flossafrica.com/m/moseleydev?p=swarm-kit)
 [![GitHub stars](https://img.shields.io/github/stars/moseleydev/swarm-kit?style=social)](https://github.com/moseleydev/swarm-kit/stargazers)
 
 Swarm Kit sits between simple chat scripts and heavyweight agent frameworks. It provides
@@ -171,7 +172,10 @@ Please read our [Code of Conduct](https://github.com/moseleydev/swarm-kit/blob/m
 
 ## Support the project
 
-If Swarm Kit is useful to you, please ⭐ **star the repo**. It helps other developers find it.
+If Swarm Kit is useful to you:
+
+- ⭐ **Star the repo**. It helps other developers find it.
+- 💛 **Support development** on [FLOSS Africa](https://flossafrica.com/m/moseleydev?p=swarm-kit).
 
 ## License
 
