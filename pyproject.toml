@@ -40,6 +40,7 @@ Documentation = "https://moseleydev.github.io/swarm-kit/"
 Repository = "https://github.com/moseleydev/swarm-kit"
 Issues = "https://github.com/moseleydev/swarm-kit/issues"
 Changelog = "https://github.com/moseleydev/swarm-kit/blob/main/CHANGELOG.md"
+Funding = "https://flossafrica.com/m/moseleydev?p=swarm-kit"
 
 [project.scripts]
 swarm-kit = "swarm_kit.cli.main:app"

@@ -6,6 +6,8 @@ Swarm Kit lets you build multi-agent AI workflows with native state management, 
 execution and database persistence, without the weight of larger frameworks. The whole
 engine is a few hundred lines you can read in one sitting.
 
+![Agent Studio showing a triage agent hand a refund request to a billing agent](assets/studio-demo.gif)
+
 ```bash
 pip install swarm-agent-kit
 ```

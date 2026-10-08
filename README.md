@@ -8,10 +8,18 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/moseleydev/swarm-kit/blob/main/LICENSE)
 [![Docs](https://img.shields.io/badge/docs-live-brightgreen)](https://moseleydev.github.io/swarm-kit/)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-orange.svg)](https://github.com/moseleydev/swarm-kit/blob/main/CONTRIBUTING.md)
+[![Hacktoberfest](https://img.shields.io/badge/Hacktoberfest-friendly-ff6f00.svg)](https://github.com/moseleydev/swarm-kit/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+[![Support on FLOSS Africa](https://img.shields.io/badge/support-FLOSS%20Africa-f59e0b.svg)](https://flossafrica.com/m/moseleydev?p=swarm-kit)
+[![GitHub stars](https://img.shields.io/github/stars/moseleydev/swarm-kit?style=social)](https://github.com/moseleydev/swarm-kit/stargazers)
 
 Swarm Kit sits between simple chat scripts and heavyweight agent frameworks. It provides
 shared state, tool execution, async support, database persistence hooks and a live
 dashboard. The core engine is short enough to read in one sitting.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/moseleydev/swarm-kit/main/docs/assets/studio-demo.gif" alt="Agent Studio showing a triage agent hand a refund request to a billing agent, which updates state and calls a refund tool" width="760">
+  <br><sub>The Agent Studio dashboard following a run: handoff → state update → tool call → reply.</sub>
+</p>
 
 ```python
 from swarm_kit import Agent, Swarm
@@ -23,7 +31,7 @@ def lookup_order(order_id: str) -> str:
 support = Agent(name="Support", instructions="Help customers with their orders.", tools=[lookup_order])
 
 result = Swarm(agents=[support]).execute("Support", "Where is ORD-123?")
-print(result.final_output)  # "Your order ORD-123 has shipped!"
+print(result.final_output)  # e.g. "Your order ORD-123 has shipped."
 ```
 
 ---
@@ -137,18 +145,37 @@ Runnable examples are in [`examples/`](https://github.com/moseleydev/swarm-kit/t
 
 ## Contributing
 
-Contributions of any size are welcome, from typo fixes to new features. Start with
-[CONTRIBUTING.md](https://github.com/moseleydev/swarm-kit/blob/main/CONTRIBUTING.md), then look at issues labelled
-[`good first issue`](https://github.com/moseleydev/swarm-kit/labels/good%20first%20issue) or
-[`help wanted`](https://github.com/moseleydev/swarm-kit/labels/help%20wanted).
+Contributions of any size are welcome, from typo fixes to new features, and first-time
+contributors are encouraged. 🎃 **Hacktoberfest participants welcome!**
+
+1. Pick an open issue labelled
+   [`good first issue`](https://github.com/moseleydev/swarm-kit/labels/good%20first%20issue) or
+   [`help wanted`](https://github.com/moseleydev/swarm-kit/labels/help%20wanted).
+   Ideas include streaming, retries, token and cost tracking, persistence adapters, Studio
+   improvements and new examples.
+2. Comment on it to get it assigned to you, so nobody duplicates your work.
+3. Follow [CONTRIBUTING.md](https://github.com/moseleydev/swarm-kit/blob/main/CONTRIBUTING.md) and open a PR.
 
 ```bash
 git clone https://github.com/moseleydev/swarm-kit && cd swarm-kit
 uv sync --group dev && uv run pytest   # no API key needed
 ```
 
+Thanks to everyone who has contributed:
+
+<a href="https://github.com/moseleydev/swarm-kit/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=moseleydev/swarm-kit" alt="Contributors" />
+</a>
+
 Please read our [Code of Conduct](https://github.com/moseleydev/swarm-kit/blob/main/CODE_OF_CONDUCT.md). To report a vulnerability, see
 [SECURITY.md](https://github.com/moseleydev/swarm-kit/blob/main/SECURITY.md).
+
+## Support the project
+
+If Swarm Kit is useful to you:
+
+- ⭐ **Star the repo**. It helps other developers find it.
+- 💛 **Support development** on [FLOSS Africa](https://flossafrica.com/m/moseleydev?p=swarm-kit).
 
 ## License
 
