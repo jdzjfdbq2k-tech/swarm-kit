@@ -1,4 +1,7 @@
+import asyncio
 import json
+import threading
+import time
 
 import pytest
 from conftest import make_response, tool_call
@@ -15,6 +18,40 @@ def make_swarm(**kwargs):
 def refund(order_number: str) -> str:
     """Process a refund."""
     return f"Refunded {order_number}"
+
+
+class ModelRoutedLLM:
+    """Routes scripted responses by model so concurrent runs never share a queue."""
+
+    def __init__(self):
+        self.by_model = {}
+        self.calls = []
+
+    def queue(self, model, *responses):
+        self.by_model.setdefault(model, []).extend(responses)
+
+    def _next(self, kwargs):
+        self.calls.append({**kwargs, "messages": [dict(m) for m in kwargs.get("messages", [])]})
+        queue = self.by_model.get(kwargs.get("model"))
+        if not queue:
+            raise AssertionError(f"FakeLLM ran out of scripted responses for model {kwargs.get('model')!r}")
+        return queue.pop(0)
+
+    def completion(self, **kwargs):
+        return self._next(kwargs)
+
+    async def acompletion(self, **kwargs):
+        return self._next(kwargs)
+
+
+def install_llm(monkeypatch, fake):
+    import swarm_kit.core.agent as agent_mod
+    import swarm_kit.core.swarm as swarm_mod
+
+    monkeypatch.setattr(agent_mod, "completion", fake.completion)
+    monkeypatch.setattr(agent_mod, "acompletion", fake.acompletion)
+    monkeypatch.setattr(swarm_mod, "completion", fake.completion)
+    monkeypatch.setattr(swarm_mod, "acompletion", fake.acompletion)
 
 
 def test_rejects_duplicate_agents_and_unknown_start_agent(llm):
@@ -149,16 +186,71 @@ async def test_async_sessions_are_isolated_and_persisted(llm):
     assert len(db["alice"][0]) == 4
 
 
-async def test_async_tools_are_awaited(llm):
+@pytest.mark.parametrize("run_sync_tools_in_thread", [False, True])
+async def test_async_tools_are_awaited(llm, run_sync_tools_in_thread):
+    tool_thread = []
+
     async def fetch(url: str) -> dict:
         """Fetch a URL."""
+        tool_thread.append(threading.get_ident())
         return {"status": 200, "url": url}
 
     agent = Agent(name="A", instructions="x", tools=[fetch])
     llm.queue(make_response(None, [tool_call("fetch", {"url": "x"}, "f1")]), make_response("ok"))
-    result = await Swarm(agents=[agent], verbose=False).execute_async("A", "go")
+    result = await Swarm(
+        agents=[agent], verbose=False, run_sync_tools_in_thread=run_sync_tools_in_thread
+    ).execute_async("A", "go")
     tool_msg = next(m for m in result.history if m["role"] == "tool")
     assert json.loads(tool_msg["content"]) == {"status": 200, "url": "x"}
+    # A genuine async tool is awaited on the current event loop, never offloaded to a thread.
+    assert tool_thread == [threading.get_ident()]
+
+
+async def test_blocking_sync_tools_from_concurrent_runs_overlap(monkeypatch):
+    both_in_flight = threading.Barrier(2, timeout=5)
+
+    def blocking(tag: str) -> str:
+        """Return only once another run's tool is in flight at the same time."""
+        both_in_flight.wait()
+        # The barrier is the real oracle; this sleep makes the overlap literal too:
+        # both runs are inside their blocking tool at the same time.
+        time.sleep(0.05)
+        return f"{tag}-done"
+
+    triage = Agent(name="Triage", instructions="x", model="model-triage", tools=[blocking])
+    billing = Agent(name="Billing", instructions="y", model="model-billing", tools=[blocking])
+    swarm = Swarm(
+        agents=[triage, billing],
+        verbose=False,
+        log_file=None,
+        run_sync_tools_in_thread=True,
+    )
+
+    # Route independently by model: the two concurrent runs never share a response queue.
+    routed = ModelRoutedLLM()
+    routed.queue(
+        "model-triage",
+        make_response(None, [tool_call("blocking", {"tag": "triage"}, "t1")]),
+        make_response("triage finished"),
+    )
+    routed.queue(
+        "model-billing",
+        make_response(None, [tool_call("blocking", {"tag": "billing"}, "b1")]),
+        make_response("billing finished"),
+    )
+    install_llm(monkeypatch, routed)
+
+    triage_result, billing_result = await asyncio.gather(
+        swarm.execute_async("Triage", "go", history=[]),
+        swarm.execute_async("Billing", "go", history=[]),
+    )
+
+    # The barrier only releases when both blocking tools are in flight simultaneously.
+    assert not both_in_flight.broken
+    assert triage_result.final_output == "triage finished"
+    assert billing_result.final_output == "billing finished"
+    assert [m["content"] for m in triage_result.history if m["role"] == "tool"] == ["triage-done"]
+    assert [m["content"] for m in billing_result.history if m["role"] == "tool"] == ["billing-done"]
 
 
 def test_async_tool_works_from_sync_execute(llm):

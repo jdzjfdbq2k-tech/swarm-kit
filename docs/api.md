@@ -45,10 +45,15 @@ Swarm(
     verbose: bool = True,
     event_handler: Callable[[dict], Any] | None = None,
     planner_kwargs: dict | None = None,
+    run_sync_tools_in_thread: bool = False,
 )
 ```
 
 Raises `ValueError` if `agents` is empty or contains duplicate names.
+
+| Argument | Description |
+| --- | --- |
+| `run_sync_tools_in_thread` | Opt-in (default `False`). When `True`, synchronous custom tools run via `asyncio.to_thread(...)` during `execute_async()` / `execute_plan_async()`, so they no longer block the event loop. `async def` tools are still awaited on the event loop. Cancelling a run does not kill a tool already running in its worker thread. |
 
 ### Unsupervised
 
