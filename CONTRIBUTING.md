@@ -13,6 +13,28 @@ issue, doc fix and pull request makes it better.
 - **Improve the docs** in [`docs/`](https://github.com/moseleydev/swarm-kit/tree/main/docs) — typos and clearer examples are always welcome.
 - **Share an example** in [`examples/`](https://github.com/moseleydev/swarm-kit/tree/main/examples) showing Swarm Kit with a real database, framework or provider.
 
+## Claiming an issue
+
+1. Comment on the issue saying you'd like to work on it. A maintainer will assign it to you.
+2. One person per issue, please. If an issue is already assigned, pick another or offer to help
+   in the comments.
+3. If you can't continue, just say so in the issue. Issues with no activity for about three
+   weeks may be unassigned so someone else can pick them up.
+4. For larger features (anything marked "discuss the API first"), agree on the design in the
+   issue before writing lots of code.
+
+### Hacktoberfest 🎃
+
+Swarm Kit takes part in Hacktoberfest. PRs that are merged, or approved and labelled
+`hacktoberfest-accepted`, count towards your contributions. Low-effort or spammy PRs (for
+example whitespace-only changes) will be closed and labelled `invalid`.
+
+### AI-assisted contributions
+
+Using AI tools is fine. Please mention it in your PR, and make sure you have read, tested
+and understood every line you submit, because reviewers will ask you about it. Large
+AI-generated changes that the author can't explain will be closed.
+
 ## Development setup
 
 We use [uv](https://docs.astral.sh/uv/) for environments and dependency locking.
